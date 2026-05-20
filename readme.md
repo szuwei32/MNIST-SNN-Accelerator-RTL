@@ -8,6 +8,10 @@ A custom RTL implementation of a Spiking Neural Network (SNN) designed for MNIST
 - **Hardware-Friendly Data Flow**: Utilizes a Channel-Last (HWC) weight permutation and a custom 3x3 `LineBuffer` for real-time spatial convolution.
 - **State Retention**: Preserves neuron membrane potentials across $T=16$ time steps using a distributed SRAM array (`Vmem_Array`).
 
+## 🏗️ Architecture
+
+![SNN Accelerator Architecture](workflow.jpg)
+
 ## 📂 Repository Structure
 - `rtl/`: SystemVerilog source files (PE, Pooling, LineBuffer, FSM, etc.).
 - `sim/`: Testbenches for unit and batch testing.
