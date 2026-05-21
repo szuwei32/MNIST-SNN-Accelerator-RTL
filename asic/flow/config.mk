@@ -7,7 +7,8 @@ export PLATFORM    = sky130hd
 export DESIGN_NAME = SNN_Conv_Top
 
 # ----- RTL Sources -------------------------------------------
-export VERILOG_FILES = $(DESIGN_DIR)/../src/SNN_Conv_Top.sv      \
+export VERILOG_FILES = $(DESIGN_DIR)/../src/ClockGate.sv         \
+                       $(DESIGN_DIR)/../src/SNN_Conv_Top.sv      \
                        $(DESIGN_DIR)/../src/SNN_Accelerator.sv   \
                        $(DESIGN_DIR)/../src/AvgPooling.sv        \
                        $(DESIGN_DIR)/../src/LineBuffer.sv        \

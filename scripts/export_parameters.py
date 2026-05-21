@@ -16,7 +16,7 @@ def main():
     device = torch.device("cpu")
     model = HWFriendlySNN().to(device)
     # Load your pre-trained model state
-    model.load_state_dict(torch.load('snn_model.pth'))
+    model.load_state_dict(torch.load('data/snn_model.pth'))
     
     with torch.no_grad():
         # --- Conv1 Quantization ---
@@ -47,9 +47,10 @@ def main():
         print("========================================================\n")
 
     # Export to .hex files for FPGA/Verilog $readmemh
-    export_to_hex(c1_quant, "weights_conv.hex")
-    export_to_hex(fc_quant, "weights_fc.hex")
-    print("✅ Spatially aligned weights exported successfully!")
+    os.makedirs("data", exist_ok=True)
+    export_to_hex(c1_quant, "data/weights_conv.hex")
+    export_to_hex(fc_quant, "data/weights_fc.hex")
+    print("✅ Spatially aligned weights exported to data/")
 
 if __name__ == "__main__":
     main()

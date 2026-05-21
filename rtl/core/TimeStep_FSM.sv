@@ -45,4 +45,24 @@ module TimeStep_FSM #(
         end
     end
 
+`ifdef FORMAL
+    // Vmem address must always be within the valid spatial map range
+    AST_addr_in_range: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        o_vmem_addr < MAP_SIZE)
+        else $error("TimeStep_FSM: vmem addr %0d out of range [0,%0d)", o_vmem_addr, MAP_SIZE);
+
+    // Frame counter must never wrap past T-1
+    AST_frame_in_range: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        frame_cnt < MAX_FRAMES)
+        else $error("TimeStep_FSM: frame_cnt=%0d exceeded MAX_FRAMES-1", frame_cnt);
+
+    // frame_done must be a single-cycle pulse (never held high)
+    AST_frame_done_pulse: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        $rose(o_frame_done) |=> !o_frame_done)
+        else $error("TimeStep_FSM: o_frame_done held high for more than 1 cycle");
+`endif
+
 endmodule

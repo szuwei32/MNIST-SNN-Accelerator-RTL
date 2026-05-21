@@ -20,7 +20,6 @@ module ConvPE #(
         current_sum = 0;
         if (!i_skip) begin
             for (int i = 0; i < 9; i++) begin
-                //current_sum = current_sum + ($signed({1'b0, i_window[i]}) * i_weights[i]);
                 current_sum = current_sum + ($signed({1'b0, i_window[i]}) * $signed(i_weights[i]));
             end
         end
@@ -30,25 +29,28 @@ module ConvPE #(
     logic signed [ACC_WIDTH-1:0] v_mem_next;
     logic spike_comb;
 
-   always_comb begin
-        
+    always_comb begin
         if (i_clear_mem) begin
-            v_mem_current = 0; 
+            v_mem_current = 0;
         end else begin
             v_mem_current = i_vmem_read >>> 1;
         end
 
         v_mem_next = v_mem_current + current_sum;
-        
-        
         spike_comb = (i_valid && ($signed(v_mem_next) >= $signed(V_THRESH)));
-        
+
         if (spike_comb) begin
-            v_mem_next = '0; 
+            v_mem_next = '0;
         end
     end
 
-    always_ff @(posedge clk or negedge rst_n) begin
+    // Gate output registers when the PE has no work to do.
+    // Enable = i_valid: covers both the skip case and idle cycles.
+    // The async reset path is independent of the gated clock — reset always wins.
+    logic clk_pe;
+    ClockGate u_cg_pe (.CK(clk), .EN(i_valid), .Q(clk_pe));
+
+    always_ff @(posedge clk_pe or negedge rst_n) begin
         if (!rst_n) begin
             o_spike      <= 1'b0;
             o_vmem_valid <= 1'b0;
@@ -59,4 +61,5 @@ module ConvPE #(
             o_vmem_write <= v_mem_next;
         end
     end
+
 endmodule

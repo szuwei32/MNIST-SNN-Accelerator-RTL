@@ -19,13 +19,12 @@ module LineBuffer #(
   assign o_window[3] = w3; assign o_window[4] = w4; assign o_window[5] = w5;
   assign o_window[6] = w6; assign o_window[7] = w7; assign o_window[8] = w8;
 
-  integer col_cnt;
-  integer row_cnt;
-  integer i;
+  logic [$clog2(IMG_WIDTH)-1:0]   col_cnt;
+  logic [$clog2(IMG_WIDTH*2)-1:0] row_cnt;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      for (i = 0; i < IMG_WIDTH; i = i + 1) begin
+      for (int i = 0; i < IMG_WIDTH; i++) begin
         lb0[i] <= 8'd0;
         lb1[i] <= 8'd0;
       end
@@ -39,7 +38,7 @@ module LineBuffer #(
      
       if (i_valid) begin
         // 1. Shift Logic
-        for (i = IMG_WIDTH-1; i > 0; i = i - 1) begin
+        for (int i = IMG_WIDTH-1; i > 0; i--) begin
           lb0[i] <= lb0[i-1];
           lb1[i] <= lb1[i-1];
         end
@@ -72,4 +71,25 @@ module LineBuffer #(
       
     end
   end
+
+`ifdef FORMAL
+    // col_cnt must stay within one row width
+    AST_col_in_range: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        col_cnt < IMG_WIDTH)
+        else $error("LineBuffer: col_cnt=%0d exceeds IMG_WIDTH-1", col_cnt);
+
+    // row_cnt must not exceed warm-up ceiling
+    AST_row_in_range: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        row_cnt <= IMG_WIDTH + 2)
+        else $error("LineBuffer: row_cnt=%0d exceeded IMG_WIDTH+2", row_cnt);
+
+    // o_valid must only go high after the 3x3 window has fully filled
+    AST_valid_after_warmup: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        o_valid |-> (row_cnt >= 2 && col_cnt >= 2))
+        else $error("LineBuffer: o_valid asserted before warm-up complete (row=%0d col=%0d)", row_cnt, col_cnt);
+`endif
+
 endmodule

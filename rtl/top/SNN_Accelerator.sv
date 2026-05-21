@@ -29,9 +29,7 @@ module SNN_Accelerator #(
     logic                        pe_vmem_valid   [0:NUM_FILTERS-1];
     logic [7:0] weights_mem_flat [0:NUM_FILTERS*9-1];
     logic signed [8:0][7:0] weights_mem [0:NUM_FILTERS-1];
-    integer f, k;
-
-    assign s_axis_ready = 1'b1; 
+    assign s_axis_ready = 1'b1;
 
     LineBuffer #(.IMG_WIDTH(IMG_WIDTH), .DATA_WIDTH(DATA_WIDTH)) u_linebuffer (
         .clk(clk), .rst_n(frame_rst_n), .i_valid(s_axis_valid & s_axis_ready), 
@@ -53,12 +51,14 @@ module SNN_Accelerator #(
         else if (lb_valid) waddr_q <= vmem_addr;
     end
 
+`ifdef SIMULATION
     initial begin
-        $readmemh("weights_conv.hex", weights_mem_flat);
-        for (f = 0; f < NUM_FILTERS; f = f + 1) begin
-            for (k = 0; k < 9; k = k + 1) weights_mem[f][k] = weights_mem_flat[f*9 + k];
+        $readmemh("data/weights_conv.hex", weights_mem_flat);
+        for (int f = 0; f < NUM_FILTERS; f++) begin
+            for (int k = 0; k < 9; k++) weights_mem[f][k] = weights_mem_flat[f*9 + k];
         end
     end
+`endif
 
     genvar gi;
     generate

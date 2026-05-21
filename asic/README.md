@@ -33,20 +33,26 @@ The Conv+Pool core represents the novel hardware design.
 ## Implementation Results
 
 Obtained from a complete RTL-to-GDSII run on SKY130HD using OpenROAD flow scripts.
+**Latest run includes clock gating** (ICG cells on Vmem_Array write path + ConvPE output FFs).
 
 | Metric | Value |
 |--------|-------|
 | Target clock | 50 MHz (20 ns) |
-| Achieved Fmax | **62 MHz** |
-| Setup WNS | **+3.88 ns** (0 violations) |
-| Hold WNS | **+0.35 ns** (0 violations) |
+| Achieved Fmax | **59 MHz** |
+| Setup WNS | **+2.12 ns** (0 violations) |
+| Hold WNS | **+0.01 ns** (0 violations) |
 | Core area | **8.875 mm²** (3000×3000 µm die, 62% utilization) |
-| Total power | **931 mW** |
+| Total power | **452 mW** ← down from 931 mW (−51%) with clock gating |
 | DRC violations | **0** |
-| Total std cells | 364,655 (125,399 sequential) |
+| Total std cells | 362,933 (125,349 sequential) |
 
-Full metrics: [`asic/reports/6_report.json`](reports/6_report.json)
+Full metrics: [`asic/reports/6_report_clockgating.json`](reports/6_report_clockgating.json)
 
+> **Clock gating impact**: ICG cells gate the write clock of 8× Vmem_Array instances
+> (8 × 676 × 18-bit FFs) and ConvPE output registers. When no pixel is being processed,
+> these FFs see no rising edges — zero dynamic power. Total power dropped 51% with
+> negligible area overhead. Fmax reduced slightly (62→59 MHz) due to ICG latch delay.
+>
 > **Note on die size**: The Conv+Pool core uses 8× `Vmem_Array` instances
 > (676×18-bit flip-flop RAM each), expanding to ~193K cells after synthesis.
 > A 3000×3000 µm die is required; the original 500×500 µm placeholder is too small.

@@ -1,7 +1,23 @@
+# Python
 __pycache__/
+*.py[cod]
+*.pth
+
+# Generated simulation artifacts
+snn_sim
+output/
+
+# Generated data files (reproduced by make weights / make test-data)
+data/weights_conv.hex
+data/weights_fc.hex
+data/snn_model.pth
+data/test_data/
+data/MNIST/
+
+# Top-level build artifact
+hw_predictions.txt
+
+# IDE
 .vscode/
 build/
-output/
-weights/
-data/
-*.py[cod]
+asic/flow_run.log

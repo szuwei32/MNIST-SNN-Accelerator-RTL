@@ -10,6 +10,11 @@ module tb_Batch_Test;
     logic [319:0] final_scores;
     logic [7:0] image_mem [0:IMG_SIZE-1];
 
+    // DFT ports tied off in functional simulation
+    logic scan_en, scan_in, scan_out;
+    assign scan_en = 1'b0;
+    assign scan_in = 1'b0;
+
     Top_System dut (.*);
 
     initial clk = 0;
@@ -42,7 +47,7 @@ module tb_Batch_Test;
             frame_rst_n  = 1;
             @(posedge clk);
 
-            $sformat(img_filename, "test_data/input_image_%0d.hex", img_idx);
+            $sformat(img_filename, "data/test_data/input_image_%0d.hex", img_idx);
             $readmemh(img_filename, image_mem);
 
             

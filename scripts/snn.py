@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -122,7 +123,8 @@ def main():
             
     print(f"Test Accuracy: {100 * correct / total:.2f}%")
     # Save the trained model weights
-    torch.save(model.state_dict(), 'snn_model.pth')
-    print("✅ Model weights saved to 'snn_model.pth'")
+    os.makedirs("data", exist_ok=True)
+    torch.save(model.state_dict(), 'data/snn_model.pth')
+    print("✅ Model weights saved to 'data/snn_model.pth'")
 if __name__ == "__main__":
     main()

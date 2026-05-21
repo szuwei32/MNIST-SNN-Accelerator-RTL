@@ -5,7 +5,7 @@ from snn import HWFriendlySNN
 def main():
     model = HWFriendlySNN()
     # Load your pre-trained model weights
-    model.load_state_dict(torch.load('snn_model.pth', map_location='cpu'))
+    model.load_state_dict(torch.load('data/snn_model.pth', map_location='cpu'))
     model.eval()
 
     # Load the first image (Image 0) from the test dataset

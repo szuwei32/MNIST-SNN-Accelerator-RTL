@@ -48,7 +48,13 @@ module ConvPE #(
         end
     end
 
-    always_ff @(posedge clk or negedge rst_n) begin
+    // Gate output registers when the PE has no work to do.
+    // Enable = i_valid: covers both the skip case and idle cycles.
+    // The async reset path is independent of the gated clock — reset always wins.
+    logic clk_pe;
+    ClockGate u_cg_pe (.CK(clk), .EN(i_valid), .Q(clk_pe));
+
+    always_ff @(posedge clk_pe or negedge rst_n) begin
         if (!rst_n) begin
             o_spike      <= 1'b0;
             o_vmem_valid <= 1'b0;
@@ -59,4 +65,25 @@ module ConvPE #(
             o_vmem_write <= v_mem_next;
         end
     end
+
+`ifdef FORMAL
+    // o_vmem_valid must follow i_valid with exactly 1-cycle pipeline delay
+    AST_vmem_valid_lag: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        i_valid |=> o_vmem_valid)
+        else $error("ConvPE: o_vmem_valid did not follow i_valid by 1 cycle");
+
+    // Spike reset: vmem_write must be 0 in the same cycle a spike fires
+    AST_spike_clears_vmem: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        $rose(o_spike) |-> (o_vmem_write == '0))
+        else $error("ConvPE: vmem_write not reset to 0 on spike cycle");
+
+    // No X/Z on window pixels when valid is asserted
+    AST_no_x_on_window: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        i_valid |-> !$isunknown(i_window))
+        else $error("ConvPE: X/Z detected in window data while i_valid=1");
+`endif
+
 endmodule
