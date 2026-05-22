@@ -59,7 +59,7 @@ See [`asic/README.md`](asic/README.md) for setup, and
 ## 💡 RTL/ASIC Design Highlights
 - **Clock Gating**: Explicit ICG cells (`rtl/cells/ClockGate.sv`) on Vmem write-path (8 × 676 FFs) and ConvPE output registers — zero dynamic power when idle
 - **DFT Ready**: `scan_en / scan_in / scan_out` ports on `Top_System` for ATPG scan-chain insertion
-- **SVA Assertions**: 9 concurrent properties (`ifdef FORMAL`) targeting ConvPE, LineBuffer, TimeStep_FSM — compatible with SymbiYosys bounded model checking
+- **Formal Verification**: 6 safety properties on LineBuffer and TimeStep_FSM control logic, proven by SymbiYosys k-induction (`make formal`)
 - **AXI4-Lite Wrapper**: `SNN_AXI_Wrapper.sv` packages the accelerator as a drop-in SoC IP block
 - **Pipelined FC MAC**: 1-cycle pipeline register breaks the 80-multiply combinatorial path in FullyConnected
 
