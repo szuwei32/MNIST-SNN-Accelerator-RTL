@@ -28,3 +28,7 @@ asic/synthesisprogress.md
 # Compiled iverilog simulation binaries
 snn_sim_sparsity
 sim_convtop_lat
+
+# SymbiYosys formal build artifacts
+formal/snn_formal/
+formal/snn_formal_*/

@@ -46,23 +46,27 @@ module TimeStep_FSM #(
     end
 
 `ifdef FORMAL
-    // Vmem address must always be within the valid spatial map range
-    AST_addr_in_range: assert property (
-        @(posedge clk) disable iff (!rst_n)
-        o_vmem_addr < MAP_SIZE)
-        else $error("TimeStep_FSM: vmem addr %0d out of range [0,%0d)", o_vmem_addr, MAP_SIZE);
+    // Formal safety properties — immediate assertions clocked on clk,
+    // proven unbounded via SymbiYosys mode prove (k-induction).
+    logic f_past_valid;
+    initial f_past_valid = 1'b0;
+    always @(posedge clk) f_past_valid <= 1'b1;
 
-    // Frame counter must never wrap past T-1
-    AST_frame_in_range: assert property (
-        @(posedge clk) disable iff (!rst_n)
-        frame_cnt < MAX_FRAMES)
-        else $error("TimeStep_FSM: frame_cnt=%0d exceeded MAX_FRAMES-1", frame_cnt);
+    // start verification from a clean reset
+    initial assume (!rst_n);
 
-    // frame_done must be a single-cycle pulse (never held high)
-    AST_frame_done_pulse: assert property (
-        @(posedge clk) disable iff (!rst_n)
-        $rose(o_frame_done) |=> !o_frame_done)
-        else $error("TimeStep_FSM: o_frame_done held high for more than 1 cycle");
+    // Vmem address always within the valid spatial map range
+    always @(posedge clk)
+        if (rst_n) AST_addr_in_range: assert (o_vmem_addr < MAP_SIZE);
+
+    // frame counter never wraps past T-1
+    always @(posedge clk)
+        if (rst_n) AST_frame_in_range: assert (frame_cnt < MAX_FRAMES);
+
+    // frame_done is a single-cycle pulse — never high two cycles running
+    always @(posedge clk)
+        if (f_past_valid && $past(rst_n) && rst_n && $past(o_frame_done))
+            AST_frame_done_pulse: assert (!o_frame_done);
 `endif
 
 endmodule

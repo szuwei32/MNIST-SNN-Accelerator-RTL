@@ -73,23 +73,26 @@ module LineBuffer #(
   end
 
 `ifdef FORMAL
-    // col_cnt must stay within one row width
-    AST_col_in_range: assert property (
-        @(posedge clk) disable iff (!rst_n)
-        col_cnt < IMG_WIDTH)
-        else $error("LineBuffer: col_cnt=%0d exceeds IMG_WIDTH-1", col_cnt);
+    // Formal safety properties — immediate assertions clocked on clk,
+    // proven unbounded via SymbiYosys mode prove (k-induction).
 
-    // row_cnt must not exceed warm-up ceiling
-    AST_row_in_range: assert property (
-        @(posedge clk) disable iff (!rst_n)
-        row_cnt <= IMG_WIDTH + 2)
-        else $error("LineBuffer: row_cnt=%0d exceeded IMG_WIDTH+2", row_cnt);
+    // start verification from a clean reset
+    initial assume (!rst_n);
 
-    // o_valid must only go high after the 3x3 window has fully filled
-    AST_valid_after_warmup: assert property (
-        @(posedge clk) disable iff (!rst_n)
-        o_valid |-> (row_cnt >= 2 && col_cnt >= 2))
-        else $error("LineBuffer: o_valid asserted before warm-up complete (row=%0d col=%0d)", row_cnt, col_cnt);
+    // col_cnt stays within one row width
+    always @(posedge clk)
+        if (rst_n) AST_col_in_range: assert (col_cnt < IMG_WIDTH);
+
+    // row_cnt never exceeds the warm-up ceiling
+    always @(posedge clk)
+        if (rst_n) AST_row_in_range: assert (row_cnt <= IMG_WIDTH + 2);
+
+    // o_valid only goes high after the row warm-up is complete.
+    // (Note: o_valid is a registered signal, so col_cnt may already have
+    // wrapped to 0 by the cycle o_valid is observed — only the row
+    // warm-up condition is a sound same-cycle invariant here.)
+    always @(posedge clk)
+        if (rst_n) AST_valid_after_warmup: assert (!o_valid || row_cnt >= 2);
 `endif
 
 endmodule

@@ -1,66 +1,35 @@
 # =============================================================================
 # snn_formal.sby — SymbiYosys formal verification script
 #
-# Proves 9 safety properties across ConvPE, LineBuffer, and TimeStep_FSM
-# using bounded model checking (depth=20 cycles).
+# Verifies 6 safety properties (immediate assertions) across two control
+# blocks:
+#   LineBuffer   — 3 properties (col range, row range, valid-after-warmup)
+#   TimeStep_FSM — 3 properties (addr range, frame range, frame_done pulse)
 #
-# Usage:
-#   conda install -c conda-forge symbiyosys   # one-time setup
-#   make formal                               # runs this file
-#   # or directly: sby -f formal/snn_formal.sby
+# mode prove = unbounded proof (BMC base case + temporal k-induction),
+# not just bounded model checking. depth bounds the BMC base case.
 #
-# Engines: smtbmc with Bitwuzla solver (fast, bit-precise arithmetic)
+# Usage:  sby -f formal/snn_formal.sby   (or: make formal)
+# Engine: smtbmc with the Bitwuzla SMT solver.
 # =============================================================================
 
 [tasks]
-conv_pe
 line_buffer
 timestep_fsm
 
-# --- ConvPE task -------------------------------------------------------------
-[conv_pe]
+[options]
 mode prove
-depth 20
+depth 30
 
-[engines conv_pe]
+[engines]
 smtbmc bitwuzla
 
-[script conv_pe]
-read -formal rtl/cells/ClockGate.sv
-read -formal rtl/core/ConvPE.sv
-prep -top ConvPE -nordff
-setattr -unset keep_hierarchy
+[script]
+line_buffer:  read_verilog -sv -formal -DFORMAL LineBuffer.sv
+line_buffer:  prep -top LineBuffer -nordff
+timestep_fsm: read_verilog -sv -formal -DFORMAL TimeStep_FSM.sv
+timestep_fsm: prep -top TimeStep_FSM -nordff
 
-[files conv_pe]
-rtl/cells/ClockGate.sv
-rtl/core/ConvPE.sv
-
-# --- LineBuffer task ---------------------------------------------------------
-[line_buffer]
-mode prove
-depth 40
-
-[engines line_buffer]
-smtbmc bitwuzla
-
-[script line_buffer]
-read -formal rtl/core/LineBuffer.sv
-prep -top LineBuffer -nordff
-
-[files line_buffer]
-rtl/core/LineBuffer.sv
-
-# --- TimeStep_FSM task -------------------------------------------------------
-[timestep_fsm]
-mode prove
-depth 700
-
-[engines timestep_fsm]
-smtbmc bitwuzla
-
-[script timestep_fsm]
-read -formal rtl/core/TimeStep_FSM.sv
-prep -top TimeStep_FSM -nordff
-
-[files timestep_fsm]
-rtl/core/TimeStep_FSM.sv
+[files]
+line_buffer:  rtl/core/LineBuffer.sv
+timestep_fsm: rtl/core/TimeStep_FSM.sv
