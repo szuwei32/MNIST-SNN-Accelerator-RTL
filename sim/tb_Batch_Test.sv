@@ -33,6 +33,19 @@ module tb_Batch_Test;
     int best_class;
     logic [31:0] max_score;
 
+    // Sparsity measurement
+    longint total_windows, skipped_windows;
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            total_windows   <= 0;
+            skipped_windows <= 0;
+        end else if (dut.u_l1_conv.lb_valid) begin
+            total_windows   <= total_windows + 1;
+            if (dut.u_l1_conv.o_skip)
+                skipped_windows <= skipped_windows + 1;
+        end
+    end
+
     initial begin
         f_out = $fopen("hw_predictions.txt", "w");
         $display("=== SNN Batch Testing Started (100 Images) ===");
@@ -98,6 +111,10 @@ module tb_Batch_Test;
         end
         $fclose(f_out);
         $display("=== SNN Batch Testing Completed! ===");
+        $display("=== Sparsity Report ===");
+        $display("Total windows  : %0d", total_windows);
+        $display("Skipped windows: %0d", skipped_windows);
+        $display("Skip rate      : %.1f%%", 100.0 * skipped_windows / total_windows);
         $finish;
     end
 endmodule

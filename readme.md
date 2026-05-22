@@ -21,35 +21,40 @@ A custom RTL implementation of a Spiking Neural Network (SNN) designed for MNIST
 
 ## 🔬 ASIC Implementation (SKY130HD)
 
-Full RTL-to-GDSII flow completed with OpenROAD on the SkyWater SKY130HD 130nm PDK.
+Full RTL-to-GDSII flow completed with OpenROAD on the SkyWater SKY130HD 130nm
+PDK, for the Conv+Pool core (`SNN_Conv_Top`). The design uses latch-based ICG
+clock gating on the `Vmem_Array` write path and `ConvPE` output registers.
 
-### Timing & Area
+### Timing & Area (with ICG)
 
 | Metric | Value |
 |--------|-------|
-| Achieved Fmax | **59 MHz** (target: 50 MHz) |
-| Setup WNS | **+2.12 ns** — 0 violations |
-| Hold WNS | **+0.01 ns** — 0 violations |
+| Setup WNS @ 50 MHz target | **+2.61 ns** — 0 violations |
+| Hold WNS | **+0.12 ns** — 0 violations |
+| Fmax | **57.5 MHz** |
 | Core area | **8.875 mm²** @ 62% utilization |
-| Standard cells | 362,933 (125,349 sequential) |
-| DRC violations | **0** |
+| Standard cells | 361,933 (125,349 sequential) |
+| Routing DRC violations | **0** |
 
-### Performance & Power
+### Clock-gating ablation
 
-| Metric | Value | Notes |
-|--------|-------|-------|
-| Throughput | **~4,703 img/s** | 59 MHz / (16 frames × 784 pixels/frame) |
-| Latency | **~213 μs/image** | 16 × 784 cycles @ 59 MHz |
-| Total power | **452 mW** | @ 59 MHz, SKY130HD 130nm — with clock gating |
-| Energy/inference | **~96 μJ** | 452 mW / 4,703 img/s |
-| Conv MACs/image | **~869,504** | 8 filters × 9 taps × 676 pixels × 16 frames |
-| Sparsity saving | **~40–50%** | Zero-window skip via SparsityController |
+Two full RTL-to-GDSII runs with **identical** PDK, floorplan and constraints —
+the only difference is `ClockGate.sv` (latch ICG vs. a `Q = CK` passthrough):
 
-> **Clock gating impact**: Adding ICG cells on Vmem_Array write path and ConvPE output registers reduced total power by **51%** (931 mW → 452 mW) with negligible area overhead. Fmax reduced slightly (62 → 59 MHz) due to ICG latch delay in the clock path.
->
-> Note: Power is dominated by 362K standard cells at 130nm. At modern process nodes (e.g., 7nm), power would scale by ~100×.
+| Metric | without ICG | with ICG | Delta |
+|--------|-------------|----------|-------|
+| Total power | 1050 mW | **453 mW** | **−56.8%** |
+| — internal (clock-pin) | 622 mW | 182 mW | −70.9% |
+| Fmax | 59.3 MHz | 57.5 MHz | −1.8 MHz |
 
-See [`asic/README.md`](asic/README.md) for full setup instructions and [`asic/reports/6_report_clockgating.json`](asic/reports/6_report_clockgating.json) for complete metrics.
+ICG cuts total power 56.8%; internal power drops the most because idle
+registers' clock pins stop toggling. The 1.8 MHz Fmax cost is the ICG latch
+insertion delay. Separately, the sparsity controller skips all-zero 3×3 input
+windows — **59.8%** of windows on the 100-image MNIST test set (measured).
+
+See [`asic/README.md`](asic/README.md) for setup, and
+[`asic/reports/6_report_icg.json`](asic/reports/6_report_icg.json) /
+[`6_report_noicg.json`](asic/reports/6_report_noicg.json) for full metrics.
 
 ## 💡 RTL/ASIC Design Highlights
 - **Clock Gating**: Explicit ICG cells (`rtl/cells/ClockGate.sv`) on Vmem write-path (8 × 676 FFs) and ConvPE output registers — zero dynamic power when idle

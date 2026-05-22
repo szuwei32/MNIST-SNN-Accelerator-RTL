@@ -32,27 +32,44 @@ The Conv+Pool core represents the novel hardware design.
 
 ## Implementation Results
 
-Obtained from a complete RTL-to-GDSII run on SKY130HD using OpenROAD flow scripts.
-**Latest run includes clock gating** (ICG cells on Vmem_Array write path + ConvPE output FFs).
+Complete RTL-to-GDSII run on SKY130HD with OpenROAD flow scripts. The design
+uses latch-based ICG clock gating on the `Vmem_Array` write path and `ConvPE`
+output registers.
 
-| Metric | Value |
-|--------|-------|
+| Metric | Value (with ICG) |
+|--------|------------------|
 | Target clock | 50 MHz (20 ns) |
-| Achieved Fmax | **59 MHz** |
-| Setup WNS | **+2.12 ns** (0 violations) |
-| Hold WNS | **+0.01 ns** (0 violations) |
+| Setup WNS | **+2.61 ns** (0 violations) |
+| Hold WNS | **+0.12 ns** (0 violations) |
+| Fmax | **57.5 MHz** |
 | Core area | **8.875 mm²** (3000×3000 µm die, 62% utilization) |
-| Total power | **452 mW** ← down from 931 mW (−51%) with clock gating |
-| DRC violations | **0** |
-| Total std cells | 362,933 (125,349 sequential) |
+| Total power | **453 mW** |
+| Routing DRC violations | **0** |
+| Sequential cells | 125,349 |
 
-Full metrics: [`asic/reports/6_report_clockgating.json`](reports/6_report_clockgating.json)
+Full metrics: [`reports/6_report_icg.json`](reports/6_report_icg.json)
 
-> **Clock gating impact**: ICG cells gate the write clock of 8× Vmem_Array instances
-> (8 × 676 × 18-bit FFs) and ConvPE output registers. When no pixel is being processed,
-> these FFs see no rising edges — zero dynamic power. Total power dropped 51% with
-> negligible area overhead. Fmax reduced slightly (62→59 MHz) due to ICG latch delay.
->
+### Clock-gating ablation
+
+Two full RTL-to-GDSII runs with **identical** PDK, floorplan and constraints —
+the only difference is `ClockGate.sv` (latch ICG vs. a `Q = CK` passthrough):
+
+| Metric | without ICG | with ICG | Delta |
+|--------|-------------|----------|-------|
+| Total power | 1050 mW | 453 mW | **−56.8%** |
+| — internal (clock-pin) | 622 mW | 182 mW | −70.9% |
+| — switching | 429 mW | 272 mW | −36.6% |
+| Fmax | 59.3 MHz | 57.5 MHz | −1.8 MHz |
+| Setup WNS @ 50 MHz | +3.14 ns | +2.61 ns | −0.53 ns |
+| Routing DRC | 0 | 0 | both clean |
+
+ICG cuts total power 56.8%; internal power drops the most (−70.9%) because idle
+registers' clock pins stop toggling. The 1.8 MHz Fmax cost is the ICG latch
+insertion delay — a normal power/timing trade-off. Reports:
+[`reports/6_report_icg.json`](reports/6_report_icg.json),
+[`reports/6_report_noicg.json`](reports/6_report_noicg.json).
+Full flow write-up: [`synthesisprogress.md`](synthesisprogress.md).
+
 > **Note on die size**: The Conv+Pool core uses 8× `Vmem_Array` instances
 > (676×18-bit flip-flop RAM each), expanding to ~193K cells after synthesis.
 > A 3000×3000 µm die is required; the original 500×500 µm placeholder is too small.

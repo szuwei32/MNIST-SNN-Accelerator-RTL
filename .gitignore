@@ -21,3 +21,10 @@ hw_predictions.txt
 .vscode/
 build/
 asic/flow_run.log
+
+# Local-only personal flow log (not published)
+asic/synthesisprogress.md
+
+# Compiled iverilog simulation binaries
+snn_sim_sparsity
+sim_convtop_lat
