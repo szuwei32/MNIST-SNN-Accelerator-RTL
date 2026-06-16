@@ -50,7 +50,8 @@ the only difference is `ClockGate.sv` (latch ICG vs. a `Q = CK` passthrough):
 ICG cuts total power 56.8%; internal power drops the most because idle
 registers' clock pins stop toggling. The 1.8 MHz Fmax cost is the ICG latch
 insertion delay. Separately, the sparsity controller skips all-zero 3×3 input
-windows — **59.8%** of windows on the 100-image MNIST test set (measured).
+windows — **64.9%** of windows on the 100-image MNIST test set (measured
+across the full batch).
 
 See [`asic/README.md`](asic/README.md) for setup, and
 [`asic/reports/6_report_icg.json`](asic/reports/6_report_icg.json) /
@@ -60,6 +61,7 @@ See [`asic/README.md`](asic/README.md) for setup, and
 - **Clock Gating**: Explicit ICG cells (`rtl/cells/ClockGate.sv`) on Vmem write-path (8 × 676 FFs) and ConvPE output registers — zero dynamic power when idle
 - **DFT Ready**: `scan_en / scan_in / scan_out` ports on `Top_System` for ATPG scan-chain insertion
 - **Formal Verification**: 6 safety properties on LineBuffer and TimeStep_FSM control logic, proven by SymbiYosys k-induction (`make formal`)
+- **Bit-Exact Datapath Check**: RTL layer-1 spike output matches an INT8 fixed-point golden reference **100% across 8.65M neuron-frames** (100 images × 16 time steps × 5,408 neurons) via `make verify-l1`
 - **AXI4-Lite Wrapper**: `SNN_AXI_Wrapper.sv` packages the accelerator as a drop-in SoC IP block
 - **Pipelined FC MAC**: 1-cycle pipeline register breaks the 80-multiply combinatorial path in FullyConnected
 
@@ -67,6 +69,7 @@ See [`asic/README.md`](asic/README.md) for setup, and
 
 ```bash
 make verify   # train → export weights → compile → simulate → check accuracy
+make verify-l1 # dump RTL L1 spikes → compare bit-exact vs INT8 + float goldens
 make formal   # run SymbiYosys formal verification (requires sby)
 make clean    # remove all generated artifacts
 make help     # show all targets

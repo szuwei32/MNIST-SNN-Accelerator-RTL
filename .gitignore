@@ -16,6 +16,7 @@ data/MNIST/
 
 # Top-level build artifact
 hw_predictions.txt
+hw_l1_spikes.txt
 
 # IDE
 .vscode/

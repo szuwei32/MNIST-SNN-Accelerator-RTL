@@ -33,14 +33,31 @@ module tb_Batch_Test;
     int best_class;
     logic [31:0] max_score;
 
-    // Sparsity measurement
-    longint total_windows, skipped_windows;
+    // -------------------------------------------------------------------------
+    // Optional L1 spike dump (enabled with `vvp snn_sim +DUMP_L1`).
+    // Captures the registered layer-1 conv spike vector every valid output
+    // cycle, in image/frame/spatial(raster) order — 676 outputs/frame,
+    // 16 frames/image, 100 images. Compared bit-for-bit against the golden
+    // references by scripts/diff_l1.py.
+    // -------------------------------------------------------------------------
+    integer f_l1;
+    logic   dump_l1;
     always_ff @(posedge clk) begin
-        if (!rst_n) begin
-            total_windows   <= 0;
-            skipped_windows <= 0;
-        end else if (dut.u_l1_conv.lb_valid) begin
-            total_windows   <= total_windows + 1;
+        if (dump_l1 && dut.u_l1_conv.m_axis_valid)
+            $fdisplay(f_l1, "%02x", dut.u_l1_conv.m_axis_spike);
+    end
+
+    // Sparsity measurement — accumulated across the whole 100-image batch.
+    // (per-image rst_n is pulsed in the loop below, so the counters must NOT
+    //  reset on rst_n or they would only report the last image.)
+    longint total_windows, skipped_windows;
+    initial begin
+        total_windows   = 0;
+        skipped_windows = 0;
+    end
+    always_ff @(posedge clk) begin
+        if (dut.u_l1_conv.lb_valid) begin
+            total_windows <= total_windows + 1;
             if (dut.u_l1_conv.o_skip)
                 skipped_windows <= skipped_windows + 1;
         end
@@ -48,6 +65,11 @@ module tb_Batch_Test;
 
     initial begin
         f_out = $fopen("hw_predictions.txt", "w");
+        dump_l1 = $test$plusargs("DUMP_L1");
+        if (dump_l1) begin
+            f_l1 = $fopen("hw_l1_spikes.txt", "w");
+            $display("=== L1 spike dump enabled -> hw_l1_spikes.txt ===");
+        end
         $display("=== SNN Batch Testing Started (100 Images) ===");
         
         for (img_idx = 0; img_idx < 100; img_idx = img_idx + 1) begin
@@ -110,6 +132,7 @@ module tb_Batch_Test;
             if (img_idx % 10 == 0) $display("Progress: %0d/100 images finished...", img_idx);
         end
         $fclose(f_out);
+        if (dump_l1) $fclose(f_l1);
         $display("=== SNN Batch Testing Completed! ===");
         $display("=== Sparsity Report ===");
         $display("Total windows  : %0d", total_windows);

@@ -71,6 +71,21 @@ verify: sim
 	@echo ">>> Verifying hardware accuracy..."
 	$(PYTHON) scripts/verify_hw.py
 
+# --- L1 spike bit-exact verification -----------------------------------------
+# Dumps the RTL layer-1 spike train and checks it against (1) a bit-exact INT8
+# fixed-point reference (must be 100%) and (2) the float PyTorch golden.
+.PHONY: verify-l1
+verify-l1: $(SIM_BIN)
+	@echo ">>> Dumping RTL L1 spikes..."
+	$(VVP) $(SIM_BIN) +DUMP_L1
+	@mkdir -p output
+	@cp -f hw_l1_spikes.txt output/hw_l1_spikes.txt
+	@echo ">>> Generating golden references..."
+	$(PYTHON) scripts/ref_l1_int.py
+	$(PYTHON) scripts/dump_l1_golden.py
+	@echo ">>> Comparing..."
+	$(PYTHON) scripts/diff_l1.py
+
 # --- Formal verification (SymbiYosys) ----------------------------------------
 .PHONY: formal
 formal:
@@ -85,7 +100,7 @@ clean:
 	rm -f data/weights_conv.hex data/weights_fc.hex
 	rm -f data/snn_model.pth
 	rm -rf data/test_data/
-	rm -f hw_predictions.txt
+	rm -f hw_predictions.txt hw_l1_spikes.txt
 	rm -rf output/
 	find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
@@ -99,6 +114,7 @@ help:
 	@echo "  make compile    — Compile RTL with iverilog"
 	@echo "  make sim        — Run 100-image batch simulation"
 	@echo "  make verify     — Full flow: sim + accuracy check  (default: make all)"
+	@echo "  make verify-l1  — Bit-exact L1 spike check vs INT8 + float goldens"
 	@echo "  make formal     — Run SymbiYosys formal verification"
 	@echo "  make clean      — Remove all generated files"
 	@echo ""
