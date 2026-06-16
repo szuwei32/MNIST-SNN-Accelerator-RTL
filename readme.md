@@ -61,7 +61,7 @@ See [`asic/README.md`](asic/README.md) for setup, and
 - **Clock Gating**: Explicit ICG cells (`rtl/cells/ClockGate.sv`) on Vmem write-path (8 × 676 FFs) and ConvPE output registers — zero dynamic power when idle
 - **DFT Ready**: `scan_en / scan_in / scan_out` ports on `Top_System` for ATPG scan-chain insertion
 - **Formal Verification**: 6 safety properties on LineBuffer and TimeStep_FSM control logic, proven by SymbiYosys k-induction (`make formal`)
-- **Bit-Exact Datapath Check**: RTL layer-1 spike output matches an INT8 fixed-point golden reference **100% across 8.65M neuron-frames** (100 images × 16 time steps × 5,408 neurons) via `make verify-l1`
+- **Bit-Exact Datapath Check**: RTL matches an INT8 fixed-point golden reference **end-to-end** — layer-1 spikes (**100%** over 8.65M neuron-frames) and final class scores (**100%** over 100 images) — via `make verify-l1`
 - **AXI4-Lite Wrapper**: `SNN_AXI_Wrapper.sv` packages the accelerator as a drop-in SoC IP block
 - **Pipelined FC MAC**: 1-cycle pipeline register breaks the 80-multiply combinatorial path in FullyConnected
 
@@ -69,7 +69,7 @@ See [`asic/README.md`](asic/README.md) for setup, and
 
 ```bash
 make verify   # train → export weights → compile → simulate → check accuracy
-make verify-l1 # dump RTL L1 spikes → compare bit-exact vs INT8 + float goldens
+make verify-l1 # bit-exact check: RTL L1 spikes + final scores vs INT8 golden
 make formal   # run SymbiYosys formal verification (requires sby)
 make clean    # remove all generated artifacts
 make help     # show all targets

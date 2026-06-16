@@ -80,8 +80,10 @@ verify-l1: $(SIM_BIN)
 	$(VVP) $(SIM_BIN) +DUMP_L1
 	@mkdir -p output
 	@cp -f hw_l1_spikes.txt output/hw_l1_spikes.txt
+	@cp -f hw_scores.txt output/hw_scores.txt
 	@echo ">>> Generating golden references..."
 	$(PYTHON) scripts/ref_l1_int.py
+	$(PYTHON) scripts/ref_pipeline_int.py
 	$(PYTHON) scripts/dump_l1_golden.py
 	@echo ">>> Comparing..."
 	$(PYTHON) scripts/diff_l1.py
@@ -100,7 +102,7 @@ clean:
 	rm -f data/weights_conv.hex data/weights_fc.hex
 	rm -f data/snn_model.pth
 	rm -rf data/test_data/
-	rm -f hw_predictions.txt hw_l1_spikes.txt
+	rm -f hw_predictions.txt hw_l1_spikes.txt hw_scores.txt
 	rm -rf output/
 	find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 

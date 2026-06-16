@@ -41,6 +41,7 @@ module tb_Batch_Test;
     // references by scripts/diff_l1.py.
     // -------------------------------------------------------------------------
     integer f_l1;
+    integer f_scores;
     logic   dump_l1;
     always_ff @(posedge clk) begin
         if (dump_l1 && dut.u_l1_conv.m_axis_valid)
@@ -67,8 +68,9 @@ module tb_Batch_Test;
         f_out = $fopen("hw_predictions.txt", "w");
         dump_l1 = $test$plusargs("DUMP_L1");
         if (dump_l1) begin
-            f_l1 = $fopen("hw_l1_spikes.txt", "w");
-            $display("=== L1 spike dump enabled -> hw_l1_spikes.txt ===");
+            f_l1     = $fopen("hw_l1_spikes.txt", "w");
+            f_scores = $fopen("hw_scores.txt", "w");
+            $display("=== L1 spike + final-score dump enabled ===");
         end
         $display("=== SNN Batch Testing Started (100 Images) ===");
         
@@ -128,11 +130,15 @@ module tb_Batch_Test;
             end
 
             $fdisplay(f_out, "%0d", best_class);
-            $fflush(f_out); 
+            $fflush(f_out);
+            if (dump_l1) begin
+                for (int c = 0; c < 10; c = c + 1)
+                    $fdisplay(f_scores, "%0d", final_scores[c*32 +: 32]);
+            end
             if (img_idx % 10 == 0) $display("Progress: %0d/100 images finished...", img_idx);
         end
         $fclose(f_out);
-        if (dump_l1) $fclose(f_l1);
+        if (dump_l1) begin $fclose(f_l1); $fclose(f_scores); end
         $display("=== SNN Batch Testing Completed! ===");
         $display("=== Sparsity Report ===");
         $display("Total windows  : %0d", total_windows);

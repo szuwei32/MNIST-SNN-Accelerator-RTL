@@ -27,6 +27,13 @@ def read_bytes(path):
         return [int(l.strip(), 16) for l in fh if l.strip()]
 
 
+def read_ints(path):
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        return [int(l.strip()) for l in fh if l.strip()]
+
+
 def popcount(x):
     return bin(x).count("1")
 
@@ -75,6 +82,44 @@ def compare(name, hw, ref):
         print(f"  >>> BIT-EXACT MATCH on all {total_neurons} neuron-frames <<<")
 
 
+NUM_CLASSES = 10
+
+
+def compare_scores(hw, ref):
+    print(f"\n=== END-TO-END: HW final class scores vs INT reference ===")
+    if hw is None:
+        print("  [skip] hw_scores.txt missing (run with +DUMP_L1)")
+        return
+    if ref is None:
+        print("  [skip] output/ref_scores.txt missing (run ref_pipeline_int.py)")
+        return
+    n = min(len(hw), len(ref))
+    if len(hw) != len(ref):
+        print(f"  [WARN] length mismatch: HW={len(hw)} ref={len(ref)}")
+
+    mism = [i for i in range(n) if hw[i] != ref[i]]
+    n_imgs = n // NUM_CLASSES
+    # prediction (argmax) per image
+    pred_ok = 0
+    for img in range(n_imgs):
+        h = hw[img * NUM_CLASSES:(img + 1) * NUM_CLASSES]
+        r = ref[img * NUM_CLASSES:(img + 1) * NUM_CLASSES]
+        if h.index(max(h)) == r.index(max(r)):
+            pred_ok += 1
+
+    print(f"  scores compared    : {n}  ({n_imgs} images x {NUM_CLASSES} classes)")
+    print(f"  score-exact matches: {n - len(mism)}/{n} "
+          f"({100.0 * (n - len(mism)) / n:.4f}%)")
+    print(f"  prediction matches : {pred_ok}/{n_imgs} "
+          f"({100.0 * pred_ok / n_imgs:.2f}%)")
+    if mism:
+        for i in mism[:8]:
+            print(f"    img {i // NUM_CLASSES:>3} class {i % NUM_CLASSES}: "
+                  f"HW={hw[i]}  ref={ref[i]}")
+    else:
+        print(f"  >>> BIT-EXACT MATCH on all {n} class scores (full datapath) <<<")
+
+
 def main():
     hw = read_bytes("hw_l1_spikes.txt") or read_bytes("output/hw_l1_spikes.txt")
     if hw is None:
@@ -87,6 +132,9 @@ def main():
 
     compare("INT reference", hw, read_bytes("output/ref_l1_spikes.txt"))
     compare("PyTorch float", hw, read_bytes("output/py_l1_spikes.txt"))
+
+    hw_scores = read_ints("hw_scores.txt") or read_ints("output/hw_scores.txt")
+    compare_scores(hw_scores, read_ints("output/ref_scores.txt"))
 
 
 if __name__ == "__main__":
