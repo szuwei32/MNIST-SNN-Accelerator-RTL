@@ -1,0 +1,71 @@
+=======================================================
+  MNIST SNN Accelerator — Yosys Synthesis Report
+  Top Module : Top_System_SRAM
+  Platform   : SKY130HD (via openroad/orfs:latest)
+  Date       : 2026-06-25
+=======================================================
+
+TOOL
+  Yosys 0.64 (git sha1 6d2c445ae)
+  Docker: openroad/flow-ubuntu22.04-dev:latest
+
+DESIGN HIERARCHY (flattened)
+  Top_System_SRAM
+  ├── SNN_Accelerator    (conv: 8 filters × 9 taps, 8×8-bit weights)
+  │   ├── 8× ConvPE      (MAC + LIF + vmem)
+  │   ├── 8× Vmem_Array  (676-entry × 18-bit FF array)
+  │   ├── LineBuffer, SparsityController, TimeStep_FSM, ClockGate
+  │   └── Conv weights: 72 × 8-bit packed into localparam [575:0]
+  ├── AvgPooling         (13×13 pool → 169 values)
+  ├── FC_Serial          (serialized FC, 10 classes, SRAM-backed)
+  │   └── 10× FCWeightSRAM
+  │       └── 10× sky130_sram_1rw1r_64x256_8  ← macro ✓
+  └── Skid FIFO (depth 4)
+
+SRAM MACRO CHOICE
+  sky130_sram_1rw1r_64x256_8 (openroad/orfs sky130ram platform)
+  - 64-bit × 256 words = 2KB capacity per bank (same as 32×512)
+  - 1rw + 1r ports, same port names as 32×512 variant
+  - NOTE: sky130_sram_2kbyte_1rw1r_32x512_8 is marked BROKEN in ORFS Makefile
+    (OpenRAM generation fails for this configuration)
+  - Physical files: asic/pdk/sky130_sram_macros/sky130_sram_1rw1r_64x256_8/
+    LEF (51 MB), LIB (16 KB), GDS (6.6 MB)
+
+SYNTHESIS RESULT — SUCCESS (0 errors)
+  Cells (generic, post-ABC, flattened):     412,782 → re-run: similar
+  sky130_sram_1rw1r_64x256_8 instances:    10 ✓
+  Netlist: asic/flow/results/Top_System_SRAM_synth.v
+
+ORFS FLOW STATUS (openroad/orfs:latest)
+  Step 1_synth       ✓  Design area 9,122,942 µm²
+  Step 2_1_floorplan ✓  Design area 9,126,043 µm², 58% utilization
+  Step 2_2_macro     ✓  10 SRAM macros placed (2-col × 5-row)
+  Step 2_3_io        ✓
+  Step 2_4_pdn       ✓  ⚠ SRAM vdd/gnd not connected (see KNOWN ISSUES)
+  Step 3_place       ⏳  Running (timing-driven, 196,748 nets)
+  Step 4_cts         Pending
+  Step 5_route       Pending
+  Step 6_finish      Pending (GDS target)
+
+MACRO PLACEMENT (asic/flow/macro_placement_sram.cfg)
+  10 instances in 2-col × 5-row arrangement
+  Each macro: 1040.76 × 403.035 µm
+  SRAM block footprint: ~2087 × 2035 µm (left/bottom die region)
+  Logic region: right of x=2097 µm + above y=2045 µm
+  Die: 4000×4000 µm; Core: 10..3990 (3980×3980 µm)
+
+KNOWN ISSUES
+  1. SRAM power pins (vdd/gnd) not matched by sky130hd PDN global connections.
+     The PDN uses VPWR/VGND patterns; OpenRAM macros use lowercase vdd/gnd.
+     Fix: asic/flow/pdn_sram.tcl prepared — re-run with PDN_TCL in config.mk.
+     Impact: LVS power connectivity failure (not a routing blocker).
+
+  2. Place density 0.45 with 9.3M µm² design on 4000×4000 µm die.
+     Placement overflow may need further die area increase if routing fails.
+
+NEXT STEPS (after 3_place completes)
+  1. Run CTS:    make asic-cts
+  2. Run Route:  make asic-route
+  3. Run Finish: make asic-finish  → GDS + timing report
+  4. Re-run full flow with PDN_TCL=pdn_sram.tcl to fix power connections.
+=======================================================

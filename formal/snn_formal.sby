@@ -22,7 +22,7 @@ mode prove
 depth 30
 
 [engines]
-smtbmc bitwuzla
+smtbmc boolector
 
 [script]
 line_buffer:  read_verilog -sv -formal -DFORMAL LineBuffer.sv

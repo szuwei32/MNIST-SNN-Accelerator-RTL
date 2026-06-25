@@ -1,139 +1,119 @@
-# ASIC Implementation — SNN Conv Core
+# ASIC Implementation — SNN Accelerator (SKY130HD)
 
-RTL-to-GDS flow using OpenROAD + SKY130 130nm PDK.
+RTL-to-GDS flow using OpenROAD + SKY130 130nm PDK. Two designs were implemented:
+the **Conv+Pool core** (`SNN_Conv_Top`) for the clock-gating ablation study, and the
+**full system** (`Top_System_SRAM`) including the SRAM-backed FC layer.
 
 ## What's in here
 
 ```
 asic/
-├── src/                      # Synthesis-ready RTL
-│   ├── SNN_Conv_Top.sv       # Top wrapper (Conv + Pool)
-│   ├── SNN_Accelerator.sv    # $readmemh replaced with localparam ROM
-│   ├── AvgPooling.sv         # Unchanged from rtl/
-│   ├── LineBuffer.sv         # Unchanged
-│   ├── ConvPE.sv             # Unchanged
-│   ├── SparsityController.sv # Unchanged
-│   ├── TimeStep_FSM.sv       # Unchanged
-│   └── Vmem_Array.sv         # Unchanged
+├── src/                         # Synthesis-ready RTL
+│   ├── Top_System_SRAM.sv       # Full system top (Conv + Pool + SRAM FC)
+│   ├── SNN_Conv_Top.sv          # Conv+Pool core (ablation target)
+│   ├── FC_Serial.sv             # Serialized FC accumulator (reads from SRAM)
+│   ├── FCWeightSRAM.sv          # SRAM arbiter / read controller
+│   ├── FC_SRAM_Loader.sv        # Weight loader
+│   ├── SNN_Accelerator.sv       # Conv core (localparam weights)
+│   ├── AvgPooling.sv
+│   ├── ConvPE.sv
+│   ├── LineBuffer.sv
+│   ├── SparsityController.sv
+│   ├── TimeStep_FSM.sv
+│   ├── Vmem_Array.sv
+│   ├── ClockGate.sv
+│   └── bb/sky130_sram_1rw1r_64x256_8.v   # SRAM blackbox
 ├── flow/
-│   ├── config.mk             # OpenROAD flow config
-│   └── constraint.sdc        # SDC timing constraints
+│   ├── config.mk                # Full-system P&R config (Top_System_SRAM)
+│   ├── constraint.sdc
+│   ├── fastroute.tcl            # Restricts signal routing to met1-met4
+│   ├── pdn_sram.tcl             # PDN + SRAM global connections
+│   └── pre_final_report.tcl     # Re-applies SRAM power connections before PSM
+├── pdk/
+│   └── sky130_sram_macros/
+│       └── sky130_sram_1rw1r_64x256_8/  # LEF/LIB/GDS/v for SRAM macro
+├── reports/
+│   ├── 6_report_icg.json        # Conv+Pool P&R with ICG
+│   └── 6_report_noicg.json      # Conv+Pool P&R without ICG
 └── scripts/
-    └── gen_weights.py        # Converts weights_conv.hex → localparam
+    └── gen_weights.py
 ```
 
-## Why FC layer is excluded
+---
 
-`FullyConnected.sv` requires 13,520 × 8-bit weights (≈108 KB).
-FPGA tools automatically map this to Block RAM.
-Standard-cell ASIC synthesis has no equivalent — an SRAM macro
-(OpenRAM / DFFRAM) would be required, which is a separate flow.
-The Conv+Pool core represents the novel hardware design.
+## Full System — `Top_System_SRAM`
 
-## Implementation Results
+Complete RTL-to-GDSII for the full accelerator: Conv (8 filters) + Avg Pool + serialized FC backed by 10 × 2 KB SRAM macros.
 
-Complete RTL-to-GDSII run on SKY130HD with OpenROAD flow scripts. The design
-uses latch-based ICG clock gating on the `Vmem_Array` write path and `ConvPE`
-output registers.
+| Metric | Value |
+|--------|-------|
+| Target clock | **40 MHz** (25 ns period) |
+| Setup WNS (post-route SPEF STA) | **+1.033 ns** — 0 violations |
+| Die area | **4000 × 4000 µm (16 mm²)** |
+| Core utilization (post-CTS) | **63%** |
+| SRAM macros | 10 × `sky130_sram_1rw1r_64x256_8` (64-bit × 256 words = 2 KB each) |
+| Routing DRC violations | **0** (after TritonRoute repair pass) |
 
-| Metric | Value (with ICG) |
-|--------|------------------|
-| Target clock | 50 MHz (20 ns) |
-| Setup WNS | **+2.61 ns** (0 violations) |
-| Hold WNS | **+0.12 ns** (0 violations) |
-| Fmax | **57.5 MHz** |
-| Core area | **8.875 mm²** (3000×3000 µm die, 62% utilization) |
-| Total power | **453 mW** |
-| Routing DRC violations | **0** |
-| Sequential cells | 125,349 |
+Critical path: ICG enable signal in `ConvPE` clock gate (`u_cg_pe.en_latch`). Clean at 40 MHz (WNS +1.033 ns); violated at 50 MHz (−1.467 ns) and 45 MHz (−0.467 ns).
 
-Full metrics: [`reports/6_report_icg.json`](reports/6_report_icg.json)
+### Key implementation challenges
 
-### Clock-gating ablation
+**met5 routing congestion**: sky130hd PDN places power straps on met5, saturating the layer for signal routes. Fixed by creating `fastroute.tcl` to call `set_routing_layers -signal met1-met4`. Setting `MAX_ROUTING_LAYER` in the environment variable alone is insufficient — the `set_routing_layers` Tcl call must be made in a pre-GRT hook.
 
-Two full RTL-to-GDSII runs with **identical** PDK, floorplan and constraints —
-the only difference is `ClockGate.sv` (latch ICG vs. a `Q = CK` passthrough):
+**SRAM PDN connectivity**: OpenRAM macro `vdd`/`gnd` pins are not connected through the standard-cell PDN ring. `add_global_connection` rules are not persisted in the ODB across steps, so they must be re-applied in a `PRE_FINAL_REPORT_TCL` hook before PSM analysis.
+
+**DRC violations**: Initial TritonRoute pass produced 12 met1 violations (Short + Metal Spacing) near the `Vmem_Array` in conv channel [2]. A second TritonRoute pass on the routed ODB resolved all violations → 0 DRC.
+
+---
+
+## Conv+Pool Core — `SNN_Conv_Top` (Clock-Gating Ablation)
+
+Two full RTL-to-GDSII runs on the Conv+Pool core only (no FC, no SRAM macros), with identical PDK, floorplan, and constraints. The only difference is `ClockGate.sv`: latch-based ICG vs. a wire passthrough (`assign Q = CK`).
 
 | Metric | without ICG | with ICG | Delta |
 |--------|-------------|----------|-------|
-| Total power | 1050 mW | 453 mW | **−56.8%** |
+| Total power (estimated) | 1050 mW | **453 mW** | **−56.8%** |
 | — internal (clock-pin) | 622 mW | 182 mW | −70.9% |
 | — switching | 429 mW | 272 mW | −36.6% |
-| Fmax | 59.3 MHz | 57.5 MHz | −1.8 MHz |
-| Setup WNS @ 50 MHz | +3.14 ns | +2.61 ns | −0.53 ns |
+| Fmax | 59.3 MHz | **57.5 MHz** | −1.8 MHz |
+| Setup WNS @ 50 MHz | +3.14 ns | +2.61 ns | — |
+| Hold WNS @ 50 MHz | +0.41 ns | +0.12 ns | — |
+| Core area | 8.875 mm² | 8.875 mm² | identical |
+| Standard cells | 361,728 | 361,933 | +205 (ICG cells) |
+| Sequential cells | 125,346 | 125,349 | identical |
 | Routing DRC | 0 | 0 | both clean |
 
-ICG cuts total power 56.8%; internal power drops the most (−70.9%) because idle
-registers' clock pins stop toggling. The 1.8 MHz Fmax cost is the ICG latch
-insertion delay — a normal power/timing trade-off. Reports:
-[`reports/6_report_icg.json`](reports/6_report_icg.json),
-[`reports/6_report_noicg.json`](reports/6_report_noicg.json).
-Full flow write-up: [`synthesisprogress.md`](synthesisprogress.md).
+ICG cuts total power 56.8%; internal power (clock-pin toggling) drops 70.9% because idle registers' clock pins stop switching. The 1.8 MHz Fmax cost is the latch insertion delay through the ICG cell.
 
-> **Note on die size**: The Conv+Pool core uses 8× `Vmem_Array` instances
-> (676×18-bit flip-flop RAM each), expanding to ~193K cells after synthesis.
-> A 3000×3000 µm die is required; the original 500×500 µm placeholder is too small.
+> Power figures are OpenROAD post-route estimates at default activity factors, not silicon measurement. The comparison is valid because both runs used identical settings.
 
-## Setup steps
+Full metrics: [`reports/6_report_icg.json`](reports/6_report_icg.json), [`reports/6_report_noicg.json`](reports/6_report_noicg.json).
 
-### 1. Weights and RTL
+---
 
-Conv weights are already hardcoded as `localparam` in `asic/src/SNN_Accelerator.sv` —
-no need to run `gen_weights.py` unless you retrain the model.
-
-Copy unchanged RTL from `rtl/` to `asic/src/`:
+## Setup — Full System P&R
 
 ```bash
-cp rtl/core/AvgPooling.sv         asic/src/
-cp rtl/core/ConvPE.sv             asic/src/
-cp rtl/core/LineBuffer.sv         asic/src/
-cp rtl/core/SparsityController.sv asic/src/
-cp rtl/core/TimeStep_FSM.sv       asic/src/
-cp rtl/memory/Vmem_Array.sv       asic/src/
+# Pull Docker image
+docker pull openroad/orfs:latest
+
+# Run full flow
+docker run --rm -v $(pwd):/work openroad/orfs:latest \
+  bash -c 'cd /OpenROAD-flow-scripts/flow && \
+    make DESIGN_CONFIG=/work/asic/flow/config.mk'
 ```
 
-### 2. Run OpenROAD flow (Docker)
-
-```bash
-# Clone ORFS (shallow)
-git clone --depth 1 https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git
-
-# Pull the Docker image
-docker pull openroad/flow-ubuntu22.04-builder:latest
-
-# Copy design files into ORFS tree
-mkdir -p OpenROAD-flow-scripts/flow/designs/sky130hd/snn_conv
-cp -r asic/* OpenROAD-flow-scripts/flow/designs/sky130hd/snn_conv/
-
-# Run full flow (non-interactive)
-docker run --rm --platform linux/amd64 \
-  --security-opt seccomp=unconfined \
-  -v $(pwd)/OpenROAD-flow-scripts/flow/designs/sky130hd/snn_conv:/OpenROAD-flow-scripts/flow/designs/sky130hd/snn_conv \
-  -w /OpenROAD-flow-scripts/flow \
-  openroad/flow-ubuntu22.04-builder:latest \
-  bash -c "make DESIGN_CONFIG=./designs/sky130hd/snn_conv/flow/config.mk synth floorplan place cts route finish 2>&1"
-```
-
-> **CPU note**: `openroad/flow-ubuntu22.04-builder:latest` requires AVX2.
-> On pre-Zen2 / pre-Haswell CPUs, use an older image tag.
 > `SKIP_CTS_REPAIR_TIMING = 1` is set in `config.mk` to work around a
-> `detailed_placement` SIGILL on Zen2 hosts during the CTS timing-repair loop;
-> remove it if your CPU supports the required instruction set.
+> `detailed_placement` SIGILL on some Zen2 hosts during CTS timing repair.
 
-### 3. Read results
+### Results location
 
-```bash
-# All metrics in one file
-cat logs/sky130hd/SNN_Conv_Top/base/6_report.json | python3 -m json.tool
+After the flow completes, deliverables are in `asic/flow/orfs_results/`:
 
-# Key numbers
-python3 -c "
-import json
-d = json.load(open('logs/sky130hd/SNN_Conv_Top/base/6_report.json'))
-print('Fmax:       ', d['finish__timing__fmax']/1e6, 'MHz')
-print('Setup WNS:  ', d['finish__timing__setup__ws'], 'ns')
-print('Hold WNS:   ', d['finish__timing__hold__ws'], 'ns')
-print('Core area:  ', d['finish__design__core__area']/1e6, 'mm²')
-print('Power:      ', d['finish__power__total'], 'W')
-"
-```
+| File | Description |
+|------|-------------|
+| `6_final_fixed.gds` | DRC-clean GDSII (461 MB) |
+| `6_final_fixed.def` | Final placement/routing DEF |
+| `6_final_fixed.odb` | OpenROAD database |
+| `6_final_fixed.v` | Gate-level netlist |
+| `6_final.spef` | RC parasitics from OpenRCX |

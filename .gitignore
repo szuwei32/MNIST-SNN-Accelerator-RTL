@@ -34,3 +34,24 @@ sim_convtop_lat
 # SymbiYosys formal build artifacts
 formal/snn_formal/
 formal/snn_formal_*/
+
+# SRAM macro PDK files (51 MB LEF; extract from openroad/orfs Docker image)
+asic/pdk/
+
+# OpenROAD P&R outputs (GDS/DEF/ODB/SPEF — multi-GB)
+asic/flow/orfs_results/
+
+# Generated synthesis netlists
+asic/flow/results/*_synth.v
+
+# OpenROAD build logs and reports
+asic/flow/orfs_logs/
+asic/flow/orfs_reports/
+asic/flow/*.log
+asic/flow/sta_result.log
+
+# SymbiYosys local installation
+.tools/
+
+# SRAM simulation prediction output
+hw_predictions_sram.txt
